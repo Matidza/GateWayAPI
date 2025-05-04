@@ -1,27 +1,3 @@
-"""  
-# Django Core Imports
-from django.conf import settings
-from django.contrib.auth import login, logout, authenticate, get_user_model
-from django.contrib.auth.hashers import make_password
-from django.core.mail import send_mail
-from django.shortcuts import render
-from django.utils.crypto import get_random_string
-from django.urls import reverse
-
-# Django REST Framework Imports
-from rest_framework import status, permissions
-from rest_framework.response import Response
-from rest_framework.reverse import reverse as drf_reverse
-from rest_framework.views import APIView
-
-# JWT Authentication
-from rest_framework_simplejwt.tokens import RefreshToken, TokenError
-from rest_framework_simplejwt.authentication import JWTAuthentication
-
-# Local App Imports
-from .serializers import UserSerializer  # Adjust the import as needed
-#from .tokens import get_tokens_for_user  # Adjust if using a custom token logic
-"""
 from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import make_password
@@ -68,6 +44,14 @@ from rest_framework.views import APIView
 from rest_framework import status
 from .serializers import UserSerializer  # Adjust the import as needed
 #from .tokens import get_tokens_for_user  # Adjust if you use custom token logic"
+
+from datetime import datetime
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.contrib.auth.hashers import make_password
+from datetime import datetime, timedelta
+from .models import User  # Update path if needed
 
 
 
@@ -130,6 +114,7 @@ class DashboardView(APIView):
 User = get_user_model()
 password_reset_tokens = {}  # temporary store (in-memory for demo)
 ## Forgot Password Route(Creates a token and sends it to user)
+"""
 class ForgotPasswordView(APIView):
     def get(self, request):
         return Response({
@@ -158,20 +143,95 @@ class ForgotPasswordView(APIView):
                 f"\n\n"
             )
             print(message)
-            """  
+         
             send_mail(
                 subject="Password Reset Request For Views.com",
                 message=message,
                 from_email=settings.EMAIL_HOST_USER,
                 recipient_list=[email],
                 fail_silently=False,
-            ) """
+            ) 
 
             return Response({'message': 'Reset token sent to email.'}, status=status.HTTP_200_OK)
         except User.DoesNotExist:
             return Response({'message': 'User with this email does not exist.'}, status=status.HTTP_404_NOT_FOUND)
+"""
 
+
+class ResetPasswordView(APIView):
+    def get(self, request):
+        return Response({
+            'message': 'Welcome to the API. Use POST to reset your password.',
+            'email': 'Admin@gmail.com',
+            'token': 'Use the token sent to your email.',
+            'new_password': 'Enter new password.',
+            'confirm_password': 'Confirm new password.'
+        }, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        email = request.data.get("email")
+        token = request.data.get("token")
+        new_password = request.data.get("new_password")
+        confirm_password = request.data.get("confirm_password")
+
+        if not all([email, token, new_password, confirm_password]):
+            return Response(
+                {'message': 'All fields are required.'}, 
+                status=status.HTTP_400_BAD_REQUEST)
+
+        if new_password != confirm_password:
+            return Response(
+                {'message': 'Passwords do not match.'}, 
+                status=status.HTTP_400_BAD_REQUEST)
+
+        token_data = password_reset_tokens.get(email)
+        if not token_data:
+            return Response(
+                {'message': 'Invalid or expired token.'}, 
+                status=status.HTTP_400_BAD_REQUEST)
+
+        # Token structure: {'token': ..., 'created_at': datetime}
+        if token_data['token'] != token:
+            return Response(
+                {'message': 'Invalid token.'}, 
+                status=status.HTTP_400_BAD_REQUEST)
+
+        # Check expiration
+        if datetime.now() - token_data['created_at'] > timedelta(minutes=30):
+            del password_reset_tokens[email]  # Clean expired token
+            return Response(
+                {'message': 'Token has expired.'}, 
+                status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = User.objects.get(email=email)
+            user.password = make_password(new_password)
+            user.save()
+
+            print(f"Password reset successful for {email}")
+
+            """
+            send_mail(
+                subject="Password Reset",
+                message="Your password has been successfully reset.",
+                from_email=settings.EMAIL_HOST_USER,
+                recipient_list=[email],
+                fail_silently=False,
+            )
+            """
+
+            del password_reset_tokens[email]  # Clean after use
+            return Response(
+                {'message': 'Password has been reset successfully.'}, 
+                status=status.HTTP_200_OK)
+
+        except User.DoesNotExist:
+            return Response(
+                {'message': 'User not found.'}, 
+                status=status.HTTP_404_NOT_FOUND)
+            
 ## Rest Password with token Validation
+"""  
 class ResetPasswordView(APIView):
     def get(self, request):
         return Response({
@@ -209,7 +269,7 @@ class ResetPasswordView(APIView):
             user = User.objects.get(email=email)
             user.password = make_password(new_password)
             user.save()
-            """   """
+           
             message = (
                 f"Hi {user.get_full_name() or user.email},\n\n"
                 f"Someone requested a password reset for your Views.com account.\n"
@@ -221,14 +281,14 @@ class ResetPasswordView(APIView):
            
             print(message)
             # send email to confirm rest of password
-            """  
+            
             send_mail(
                 subject="Password Reset",
                 message=f"Your password was rest",
                 from_email=settings.EMAIL_HOST_USER,
                 recipient_list=[email],
                 fail_silently=False,
-            )"""
+            )
  
             # Remove token after use
             del password_reset_tokens[email]
@@ -240,7 +300,7 @@ class ResetPasswordView(APIView):
             return Response(
                 {'message': 'User not found.'}, 
                 status=status.HTTP_404_NOT_FOUND)
-
+ """
 
 # Logout User
 class LogoutView(APIView):

@@ -55,6 +55,8 @@ from .models import User  # Update path if needed
 
 
 
+
+
 ## Login User Route
 class SigninPageView(APIView):
     'Root route (/) for the API entry point'
@@ -87,7 +89,7 @@ class SigninPageView(APIView):
             token = get_tokens_for_user(user)
             login(request, user)
             return Response(
-                {'message': 'Login successful', 'user': serializer.data, 'token': token},
+                {'message': 'Login successful', 'user': serializer.data, 'token': token, 'user_type': user.user_type},
                 status=status.HTTP_200_OK
             )
         
@@ -102,19 +104,188 @@ class SigninPageView(APIView):
             status=status.HTTP_200_OK
         )
 
+
 class DashboardView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     def get(self,request):
         return Response({
-            'message': 'you have access'
+            'message': 'you have access','user_type': user.user_type,  # <-- Include user_type in response body
         })
 
 
+
+   
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# PRACTICE
+"""
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.core.mail import send_mail
+from django.conf import settings
+from django.contrib.auth.hashers import make_password
+from django.contrib.auth import get_user_model
+from django.utils.crypto import get_random_string
+from datetime import datetime, timedelta
+
+# In-memory token store (consider Redis or DB for production)
 User = get_user_model()
 password_reset_tokens = {}  # temporary store (in-memory for demo)
-## Forgot Password Route(Creates a token and sends it to user)
+
+# Forgot Password Route (Creates a token and sends it to user)
+class ForgotPasswordView(APIView):
+    def get(self, request):
+        return Response({
+            'message': 'Welcome to the API. Use POST to request a password reset.',
+            'email': 'Admin@gmail.com'
+        }, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        email = request.data.get("email")
+        if not email:
+            return Response({'message': 'Email is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = User.objects.get(email=email)
+            token = get_random_string(length=32)
+            created_at = datetime.now()
+            expires_at = created_at + timedelta(minutes=30)
+            password_reset_tokens[email] = {
+                'token': token,
+                'created_at': created_at
+            }
+
+            # Optional: Password reset URL
+            reset_url = f"http://127.0.0.1:8000/api/auth/reset_password?email={email}&token={token}"
+
+            # Email message with token and expiration time
+            message = (
+                f"Hi {user},\n\n"
+                f"You requested a password reset for your Views.com account.\n"
+                f"If this wasn't you, please ignore this email.\n\n"
+                f"Use the token below to reset your password:\n\n"
+                f"Token: {token}\n"
+                f"Expires At: {expires_at.strftime('%Y-%m-%d %H:%M:%S')} (in 30 minutes)\n\n"
+                f"Or click the link below to reset your password directly:\n"
+                f"{reset_url}\n\n"
+                f"Thanks,\nThe Views.com Team"
+            )
+            print(message)
+
+            return Response({'message': 'Reset token sent to your email.'}, status=status.HTTP_200_OK)
+
+        except User.DoesNotExist:
+            return Response({'message': 'User with this email does not exist.'}, status=status.HTTP_404_NOT_FOUND)
+
+
+class ResetPasswordView(APIView):
+    def get(self, request):
+        return Response({
+            'message': 'Welcome to the API. Use POST to reset your password.',
+            'email': 'Admin@gmail.com',
+            'token': 'Use the token sent to your email.',
+            'new_password': 'Enter new password.',
+            'confirm_password': 'Confirm new password.'
+        }, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        email = request.data.get("email")
+        token = request.data.get("token")
+        new_password = request.data.get("new_password")
+        confirm_password = request.data.get("confirm_password")
+
+        if not all([email, token, new_password, confirm_password]):
+            return Response({'message': 'All fields are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if new_password != confirm_password:
+            return Response({'message': 'Passwords do not match.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        token_data = password_reset_tokens.get(email)
+        if not token_data:
+            return Response({'message': 'Invalid or expired token.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if token_data['token'] != token:
+            return Response({'message': 'Invalid token.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if datetime.now() - token_data['created_at'] > timedelta(minutes=30):
+            del password_reset_tokens[email]
+            return Response({'message': 'Token has expired.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = User.objects.get(email=email)
+            user.password = make_password(new_password)
+            user.save()
+
+            # Clean up token
+            del password_reset_tokens[email]
+
+            # Optional: Notify user of success
+
+
+            return Response({'message': 'Password has been reset successfully.'}, status=status.HTTP_200_OK)
+
+        except User.DoesNotExist:
+            return Response({'message': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+
 """
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# REAL WORKING CODE
+# In-memory token store (consider Redis or DB for production)
+User = get_user_model()
+password_reset_tokens = {}  # temporary store (in-memory for demo)
 class ForgotPasswordView(APIView):
     def get(self, request):
         return Response({
@@ -143,95 +314,20 @@ class ForgotPasswordView(APIView):
                 f"\n\n"
             )
             print(message)
-         
+            """    
             send_mail(
                 subject="Password Reset Request For Views.com",
                 message=message,
                 from_email=settings.EMAIL_HOST_USER,
                 recipient_list=[email],
                 fail_silently=False,
-            ) 
+            ) """
 
             return Response({'message': 'Reset token sent to email.'}, status=status.HTTP_200_OK)
         except User.DoesNotExist:
             return Response({'message': 'User with this email does not exist.'}, status=status.HTTP_404_NOT_FOUND)
-"""
 
 
-class ResetPasswordView(APIView):
-    def get(self, request):
-        return Response({
-            'message': 'Welcome to the API. Use POST to reset your password.',
-            'email': 'Admin@gmail.com',
-            'token': 'Use the token sent to your email.',
-            'new_password': 'Enter new password.',
-            'confirm_password': 'Confirm new password.'
-        }, status=status.HTTP_200_OK)
-
-    def post(self, request):
-        email = request.data.get("email")
-        token = request.data.get("token")
-        new_password = request.data.get("new_password")
-        confirm_password = request.data.get("confirm_password")
-
-        if not all([email, token, new_password, confirm_password]):
-            return Response(
-                {'message': 'All fields are required.'}, 
-                status=status.HTTP_400_BAD_REQUEST)
-
-        if new_password != confirm_password:
-            return Response(
-                {'message': 'Passwords do not match.'}, 
-                status=status.HTTP_400_BAD_REQUEST)
-
-        token_data = password_reset_tokens.get(email)
-        if not token_data:
-            return Response(
-                {'message': 'Invalid or expired token.'}, 
-                status=status.HTTP_400_BAD_REQUEST)
-
-        # Token structure: {'token': ..., 'created_at': datetime}
-        if token_data['token'] != token:
-            return Response(
-                {'message': 'Invalid token.'}, 
-                status=status.HTTP_400_BAD_REQUEST)
-
-        # Check expiration
-        if datetime.now() - token_data['created_at'] > timedelta(minutes=30):
-            del password_reset_tokens[email]  # Clean expired token
-            return Response(
-                {'message': 'Token has expired.'}, 
-                status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            user = User.objects.get(email=email)
-            user.password = make_password(new_password)
-            user.save()
-
-            print(f"Password reset successful for {email}")
-
-            """
-            send_mail(
-                subject="Password Reset",
-                message="Your password has been successfully reset.",
-                from_email=settings.EMAIL_HOST_USER,
-                recipient_list=[email],
-                fail_silently=False,
-            )
-            """
-
-            del password_reset_tokens[email]  # Clean after use
-            return Response(
-                {'message': 'Password has been reset successfully.'}, 
-                status=status.HTTP_200_OK)
-
-        except User.DoesNotExist:
-            return Response(
-                {'message': 'User not found.'}, 
-                status=status.HTTP_404_NOT_FOUND)
-            
-## Rest Password with token Validation
-"""  
 class ResetPasswordView(APIView):
     def get(self, request):
         return Response({
@@ -281,14 +377,14 @@ class ResetPasswordView(APIView):
            
             print(message)
             # send email to confirm rest of password
-            
+            """   
             send_mail(
                 subject="Password Reset",
                 message=f"Your password was rest",
                 from_email=settings.EMAIL_HOST_USER,
                 recipient_list=[email],
                 fail_silently=False,
-            )
+            )"""
  
             # Remove token after use
             del password_reset_tokens[email]
@@ -300,7 +396,10 @@ class ResetPasswordView(APIView):
             return Response(
                 {'message': 'User not found.'}, 
                 status=status.HTTP_404_NOT_FOUND)
- """
+
+
+
+
 
 # Logout User
 class LogoutView(APIView):
@@ -358,9 +457,15 @@ class SignupPageView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-## Token Generation 
+from rest_framework_simplejwt.tokens import RefreshToken
+
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
+
+    # Add custom claims to access token
+    refresh['user_type'] = user.user_type
+    refresh['email'] = user.email
+
     return {
         'refresh': str(refresh),
         'access': str(refresh.access_token),
